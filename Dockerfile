@@ -64,6 +64,7 @@ RUN apt-get update \
         iproute2 \
         iputils-ping \
         openresolv \
+        procps \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=awg-tools-builder /out/usr/bin/awg /usr/bin/awg
