@@ -1,0 +1,29 @@
+services:
+  api-side:
+    build:
+      context: .
+      target: api-side
+    container_name: awg-pinger-api-side
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      API_TOKEN: ${API_TOKEN:-}
+
+  awg-client-side:
+    build:
+      context: .
+      target: awg-client-side
+    container_name: awg-pinger-awg-client-side
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    volumes:
+      - ./data:/app/data:ro
+    environment:
+      SETTINGS_PATH: /app/data/settings.json
+      TUNNEL_QUICK_CMD: awg-quick
+      API_TOKEN: ${API_TOKEN:-}

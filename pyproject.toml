@@ -1,0 +1,18 @@
+[project]
+name = "awg-pinger"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi==0.115.6",
+    "httpx==0.28.1",
+    "uvicorn[standard]==0.34.0",
+    "pydantic==2.10.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
