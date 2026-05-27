@@ -88,7 +88,7 @@ docker compose up --build awg-client-side
 
 The API service needs `api-data/clients.json`.
 The client container needs `/dev/net/tun`, `NET_ADMIN`, and host kernel support for AmneziaWG.
-The image builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`.
+The image builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`, and includes `amneziawg-go` as a userspace fallback when the host kernel does not support `type amneziawg`.
 
 ## Client Logs
 
@@ -99,6 +99,8 @@ LOG_LEVEL=DEBUG docker compose up awg-client-side
 ```
 
 This prints `awg-quick`, `ping`, API response status, and command output on failures.
+
+When both services run in the same compose project, set client `api_base_url` to `http://api-side:8000`. Inside a container, `localhost` points to that same container, not to `api-side`.
 
 ## Telegram Alerts
 

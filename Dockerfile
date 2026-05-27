@@ -36,6 +36,16 @@ RUN make -C /src/amneziawg-tools/src install \
     WITH_SYSTEMDUNITS=no
 
 
+FROM golang:1.24 AS awg-go-builder
+
+ARG AMNEZIAWG_GO_REF=master
+
+RUN git clone --depth 1 --branch "${AMNEZIAWG_GO_REF}" \
+    https://github.com/amnezia-vpn/amneziawg-go.git /src/amneziawg-go
+
+RUN make -C /src/amneziawg-go install DESTDIR=/out
+
+
 FROM python-base AS api-side
 
 COPY api_side ./api_side
@@ -57,7 +67,8 @@ RUN apt-get update \
 
 COPY --from=awg-tools-builder /out/usr/bin/awg /usr/bin/awg
 COPY --from=awg-tools-builder /out/usr/bin/awg-quick /usr/bin/awg-quick
-RUN chmod +x /usr/bin/awg /usr/bin/awg-quick
+COPY --from=awg-go-builder /out/usr/bin/amneziawg-go /usr/bin/amneziawg-go
+RUN chmod +x /usr/bin/awg /usr/bin/awg-quick /usr/bin/amneziawg-go
 
 COPY awg_client_side ./awg_client_side
 
