@@ -21,6 +21,7 @@ services:
       target: awg-client-side
     container_name: awg-pinger-awg-client-side
     restart: unless-stopped
+    privileged: true
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
