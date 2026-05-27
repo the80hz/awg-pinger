@@ -29,8 +29,10 @@ RUN apt-get update \
 RUN git clone --depth 1 --branch "${AMNEZIAWG_TOOLS_REF}" \
     https://github.com/amnezia-vpn/amneziawg-tools.git /src/amneziawg-tools
 
-RUN make -C /src/amneziawg-tools/src \
+RUN make -C /src/amneziawg-tools/src install \
+    DESTDIR=/out \
     WITH_BASHCOMPLETION=no \
+    WITH_WGQUICK=yes \
     WITH_SYSTEMDUNITS=no
 
 
@@ -53,8 +55,8 @@ RUN apt-get update \
         iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=awg-tools-builder /src/amneziawg-tools/src/awg /usr/bin/awg
-COPY --from=awg-tools-builder /src/amneziawg-tools/src/wg-quick/linux.bash /usr/bin/awg-quick
+COPY --from=awg-tools-builder /out/usr/bin/awg /usr/bin/awg
+COPY --from=awg-tools-builder /out/usr/bin/awg-quick /usr/bin/awg-quick
 RUN chmod +x /usr/bin/awg /usr/bin/awg-quick
 
 COPY awg_client_side ./awg_client_side
