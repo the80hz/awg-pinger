@@ -1,5 +1,6 @@
 services:
   api-side:
+    image: the80hz/awg-pinger:api-side
     build:
       context: .
       target: api-side
@@ -13,6 +14,7 @@ services:
       CLIENTS_PATH: /app/api-data/clients.json
 
   awg-client-side:
+    image: the80hz/awg-pinger:awg-client-side
     build:
       context: .
       target: awg-client-side
