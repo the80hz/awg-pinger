@@ -63,6 +63,7 @@ RUN apt-get update \
         iptables \
         iproute2 \
         iputils-ping \
+        openresolv \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=awg-tools-builder /out/usr/bin/awg /usr/bin/awg

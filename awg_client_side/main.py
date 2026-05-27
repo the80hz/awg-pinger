@@ -3,6 +3,7 @@ import logging
 import os
 import secrets
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 import httpx
 from pydantic import ValidationError
@@ -17,6 +18,16 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("awg-client-side")
+
+
+def warn_if_loopback_api_url(api_base_url: str) -> None:
+    host = urlparse(api_base_url).hostname
+    if host in {"localhost", "127.0.0.1", "::1"}:
+        logger.warning(
+            "api_base_url points to loopback host=%s; inside Docker this points to awg-client-side, "
+            "not api-side. Use http://api-side:8000 when both services run in the same compose project.",
+            host,
+        )
 
 
 def signed_headers(client_id: str, client_secret: str, body: str) -> dict[str, str]:
@@ -73,6 +84,7 @@ async def run_once() -> None:
         settings.interval_seconds,
         len(settings.servers),
     )
+    warn_if_loopback_api_url(settings.api_base_url)
     timeout = httpx.Timeout(settings.request_timeout_seconds)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
