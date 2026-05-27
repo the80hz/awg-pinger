@@ -7,8 +7,10 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    volumes:
+      - ./api-data:/app/api-data:ro
     environment:
-      API_TOKEN: ${API_TOKEN:-}
+      CLIENTS_PATH: /app/api-data/clients.json
 
   awg-client-side:
     build:
@@ -26,4 +28,3 @@ services:
     environment:
       SETTINGS_PATH: /app/data/settings.json
       TUNNEL_QUICK_CMD: awg-quick
-      API_TOKEN: ${API_TOKEN:-}

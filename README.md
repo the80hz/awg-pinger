@@ -14,6 +14,24 @@ Two small services for periodic AWG tunnel checks.
 
 `api-side` can run elsewhere. It receives check results and exposes the latest status.
 
+## API Clients
+
+Create `api-data/clients.json` next to `compose.yml` on the API host:
+
+```json
+{
+  "clients": [
+    {
+      "client_id": "vps-checker-1",
+      "secret": "change-me-to-a-long-random-secret-at-least-32-chars",
+      "enabled": true
+    }
+  ]
+}
+```
+
+Each client should have a unique `client_id` and a unique random secret. To revoke one checker, set `enabled` to `false` or remove it.
+
 ## Client Configuration
 
 Create `data/settings.json` next to `compose.yml`:
@@ -21,6 +39,7 @@ Create `data/settings.json` next to `compose.yml`:
 ```json
 {
   "client_id": "vps-checker-1",
+  "client_secret": "change-me-to-a-long-random-secret-at-least-32-chars",
   "api_base_url": "https://api.example.com",
   "interval_seconds": 1800,
   "request_timeout_seconds": 30,
@@ -67,16 +86,33 @@ Run only the client after setting `api_base_url` in `data/settings.json` to the 
 docker compose up --build awg-client-side
 ```
 
+The API service needs `api-data/clients.json`.
 The client container needs `/dev/net/tun`, `NET_ADMIN`, and host kernel support for AmneziaWG.
 The image builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`.
 
-## Optional API Token
+## Request Security
 
-Set the same `API_TOKEN` environment variable on both services. If `api-side` has `API_TOKEN`, it requires:
+`POST /checks` requires HMAC-SHA256 request signing. The client signs the exact JSON body with its `client_secret`.
+
+Required headers:
 
 ```text
-Authorization: Bearer <token>
+X-Client-Id: vps-checker-1
+X-Timestamp: 2026-05-27T10:00:00Z
+X-Nonce: random-value-used-once
+X-Signature: hmac_sha256_hex(secret, timestamp + "\n" + nonce + "\n" + body)
 ```
+
+The API checks:
+
+- `client_id` exists and is enabled in `api-data/clients.json`;
+- `X-Client-Id` matches `client_id` in the JSON body;
+- timestamp is within a 2 minute window;
+- nonce was not used before in that window;
+- signature matches the body exactly;
+- request body is at most 64 KiB.
+
+Use HTTPS in front of `api-side` when it runs outside a private Docker network. The HMAC prevents body tampering and replay, but HTTPS still protects metadata and secrets from network observers.
 
 ## API Endpoints
 
@@ -91,6 +127,10 @@ Receive check result:
 ```bash
 curl -X POST http://localhost:8000/checks \
   -H 'Content-Type: application/json' \
+  -H 'X-Client-Id: vps-checker-1' \
+  -H 'X-Timestamp: 2026-05-27T10:00:00Z' \
+  -H 'X-Nonce: unique-random-value-123' \
+  -H 'X-Signature: <signature>' \
   -d '{"client_id":"vps-checker-1","server_id":"vps-1","ok":true,"comment":"tunnel is reachable"}'
 ```
 

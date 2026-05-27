@@ -1,5 +1,6 @@
 {
   "client_id": "vps-checker-1",
+  "client_secret": "change-me-to-a-long-random-secret-at-least-32-chars",
   "api_base_url": "http://api-side:8000",
   "interval_seconds": 1800,
   "request_timeout_seconds": 30,

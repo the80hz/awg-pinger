@@ -5,6 +5,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from shared.security import CLIENT_ID_RE
+
 
 SERVER_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$")
 
@@ -39,6 +41,7 @@ class ServerConfig(BaseModel):
 
 class ClientSettings(BaseModel):
     client_id: str = "default"
+    client_secret: str = Field(min_length=32)
     api_base_url: str
     interval_seconds: int = Field(default=1800, ge=30)
     request_timeout_seconds: int = Field(default=30, ge=3, le=300)
@@ -51,6 +54,13 @@ class ClientSettings(BaseModel):
         if not cleaned.startswith(("http://", "https://")):
             raise ValueError("api_base_url must start with http:// or https://")
         return cleaned
+
+    @field_validator("client_id")
+    @classmethod
+    def validate_client_id(cls, value: str) -> str:
+        if not CLIENT_ID_RE.fullmatch(value):
+            raise ValueError("client_id must contain only letters, numbers, dots, underscores and dashes")
+        return value
 
     @model_validator(mode="after")
     def validate_unique_ids(self) -> "ClientSettings":
