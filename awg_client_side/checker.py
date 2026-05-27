@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import tempfile
 import time
 from pathlib import Path
 
@@ -31,28 +32,31 @@ def config_path_for(settings_path: Path, server: ServerConfig) -> Path:
 async def _run(command: list[str], timeout: int) -> str:
     command_text = " ".join(command)
     logger.debug("running command timeout=%ss command=%s", timeout, command_text)
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-    except FileNotFoundError as exc:
-        logger.error("command not found command=%s", command[0])
-        raise TunnelCheckError(f"command not found: {command[0]}") from exc
-    except PermissionError as exc:
-        logger.error("permission denied command=%s", command[0])
-        raise TunnelCheckError(f"permission denied running command: {command[0]}") from exc
+    with tempfile.TemporaryFile() as output_file:
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=output_file,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+        except FileNotFoundError as exc:
+            logger.error("command not found command=%s", command[0])
+            raise TunnelCheckError(f"command not found: {command[0]}") from exc
+        except PermissionError as exc:
+            logger.error("permission denied command=%s", command[0])
+            raise TunnelCheckError(f"permission denied running command: {command[0]}") from exc
 
-    try:
-        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
-    except asyncio.TimeoutError as exc:
-        process.kill()
-        await process.wait()
-        logger.error("command timed out command=%s", command_text)
-        raise TunnelCheckError(f"command timed out: {command_text}") from exc
+        try:
+            await asyncio.wait_for(process.wait(), timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            process.kill()
+            await process.wait()
+            output = _read_output_file(output_file)
+            logger.error("command timed out command=%s output=%s", command_text, output)
+            raise TunnelCheckError(f"command timed out: {command_text}", output) from exc
 
-    output = stdout.decode("utf-8", errors="replace").strip()
+        output = _read_output_file(output_file)
+
     if process.returncode != 0:
         logger.error(
             "command failed returncode=%s command=%s output=%s",
@@ -65,11 +69,16 @@ async def _run(command: list[str], timeout: int) -> str:
     return output
 
 
+def _read_output_file(output_file) -> str:
+    output_file.seek(0)
+    return output_file.read().decode("utf-8", errors="replace").strip()
+
+
 async def check_tunnel(settings_path: Path, client_id: str, server: ServerConfig) -> CheckResult:
     config_path = config_path_for(settings_path, server)
     started_at = time.monotonic()
     tunnel_quick_cmd = os.getenv("TUNNEL_QUICK_CMD", "awg-quick")
-    interface_is_up = False
+    attempted_up = False
     logger.info(
         "starting tunnel check client_id=%s server_id=%s config=%s ping_host=%s",
         client_id,
@@ -79,8 +88,8 @@ async def check_tunnel(settings_path: Path, client_id: str, server: ServerConfig
     )
 
     try:
+        attempted_up = True
         await _run([tunnel_quick_cmd, "up", str(config_path)], server.timeout_seconds)
-        interface_is_up = True
         logger.info("tunnel is up server_id=%s", server.id)
         ping_output = await _run(
             [
@@ -123,9 +132,9 @@ async def check_tunnel(settings_path: Path, client_id: str, server: ServerConfig
             command_output=exc.command_output,
         )
     finally:
-        if interface_is_up:
+        if attempted_up:
             try:
                 logger.info("bringing tunnel down server_id=%s", server.id)
                 await _run([tunnel_quick_cmd, "down", str(config_path)], server.timeout_seconds)
             except TunnelCheckError:
-                logger.exception("failed to bring tunnel down server_id=%s", server.id)
+                logger.warning("failed to bring tunnel down server_id=%s", server.id)

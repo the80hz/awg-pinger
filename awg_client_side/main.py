@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import secrets
+import socket
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
@@ -73,6 +74,18 @@ async def report_result(
     response.raise_for_status()
 
 
+def log_api_resolution(api_base_url: str) -> None:
+    host = urlparse(api_base_url).hostname
+    if not host:
+        logger.warning("api_base_url has no hostname api_base_url=%s", api_base_url)
+        return
+    try:
+        addresses = sorted({item[4][0] for item in socket.getaddrinfo(host, None)})
+        logger.debug("resolved api host host=%s addresses=%s", host, addresses)
+    except socket.gaierror as exc:
+        logger.error("failed to resolve api host host=%s error=%s", host, exc)
+
+
 async def run_once() -> None:
     settings_path = get_settings_path()
     logger.info("loading settings path=%s", settings_path)
@@ -85,12 +98,14 @@ async def run_once() -> None:
         len(settings.servers),
     )
     warn_if_loopback_api_url(settings.api_base_url)
+    log_api_resolution(settings.api_base_url)
     timeout = httpx.Timeout(settings.request_timeout_seconds)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for server in settings.servers:
             logger.info("checking server server_id=%s name=%s", server.id, server.name)
             result = await check_tunnel(settings_path, settings.client_id, server)
+            log_api_resolution(settings.api_base_url)
             try:
                 await report_result(
                     client,
