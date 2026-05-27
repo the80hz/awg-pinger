@@ -90,6 +90,16 @@ The API service needs `api-data/clients.json`.
 The client container needs `/dev/net/tun`, `NET_ADMIN`, and host kernel support for AmneziaWG.
 The image builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`.
 
+## Client Logs
+
+`awg-client-side` logs each tunnel check step. For detailed diagnostics, run with:
+
+```bash
+LOG_LEVEL=DEBUG docker compose up awg-client-side
+```
+
+This prints `awg-quick`, `ping`, API response status, and command output on failures.
+
 ## Telegram Alerts
 
 `api-side` can send Telegram notifications when a received check result has `ok: false`.

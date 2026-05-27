@@ -31,3 +31,4 @@ services:
     environment:
       SETTINGS_PATH: /app/data/settings.json
       TUNNEL_QUICK_CMD: awg-quick
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
