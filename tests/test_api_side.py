@@ -3,7 +3,10 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
+import api_side.main
 from api_side.main import app, latest_results, result_history, used_nonces
+from api_side.telegram import failure_message, telegram_config
+from shared.schemas import CheckResult
 from shared.security import canonical_json, sign_body
 
 
@@ -146,3 +149,99 @@ def test_rejects_disabled_client(monkeypatch, tmp_path) -> None:
 
     assert response.status_code == 401
     assert response.json()["detail"]["comment"] == "unknown or disabled client"
+
+
+def test_does_not_notify_on_success(monkeypatch, tmp_path) -> None:
+    configure_clients(monkeypatch, tmp_path)
+    reset_state()
+    calls = []
+
+    async def fake_send_failure_notification(result: CheckResult) -> None:
+        calls.append(result)
+
+    monkeypatch.setattr(api_side.main, "send_failure_notification", fake_send_failure_notification)
+    client = TestClient(app)
+    body = canonical_json(check_payload())
+
+    response = client.post(
+        "/checks",
+        content=body,
+        headers=signed_headers(body, nonce="nonce-success12345678"),
+    )
+
+    assert response.status_code == 200
+    assert calls == []
+
+
+def test_notifies_on_failure(monkeypatch, tmp_path) -> None:
+    configure_clients(monkeypatch, tmp_path)
+    reset_state()
+    calls = []
+
+    async def fake_send_failure_notification(result: CheckResult) -> None:
+        calls.append(result)
+
+    monkeypatch.setattr(api_side.main, "send_failure_notification", fake_send_failure_notification)
+    client = TestClient(app)
+    payload = check_payload()
+    payload["ok"] = False
+    payload["comment"] = "ping failed"
+    payload["command_output"] = "100% packet loss"
+    body = canonical_json(payload)
+
+    response = client.post(
+        "/checks",
+        content=body,
+        headers=signed_headers(body, nonce="nonce-failure12345678"),
+    )
+
+    assert response.status_code == 200
+    assert len(calls) == 1
+    assert calls[0].server_id == "vps-1"
+    assert calls[0].ok is False
+
+
+def test_failure_message_contains_context() -> None:
+    message = failure_message(
+        CheckResult(
+            client_id="client-1",
+            server_id="vps-1",
+            server_name="VPS 1",
+            ok=False,
+            comment="ping failed",
+            duration_ms=123,
+            command_output="100% packet loss",
+        )
+    )
+
+    assert "AWG tunnel check failed" in message
+    assert "client-1" in message
+    assert "VPS 1" in message
+    assert "ping failed" in message
+    assert "100% packet loss" in message
+
+
+def test_telegram_config_loads_from_file(monkeypatch, tmp_path) -> None:
+    telegram_path = tmp_path / "telegram.json"
+    telegram_path.write_text(
+        json.dumps({"bot_token": "file-token", "chat_id": "file-chat"}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.setenv("TELEGRAM_CONFIG_PATH", str(telegram_path))
+
+    assert telegram_config() == ("file-token", "file-chat")
+
+
+def test_telegram_env_overrides_file(monkeypatch, tmp_path) -> None:
+    telegram_path = tmp_path / "telegram.json"
+    telegram_path.write_text(
+        json.dumps({"bot_token": "file-token", "chat_id": "file-chat"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TELEGRAM_CONFIG_PATH", str(telegram_path))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-token")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "env-chat")
+
+    assert telegram_config() == ("env-token", "env-chat")

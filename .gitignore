@@ -7,3 +7,4 @@ data/settings.json
 data/*.conf
 !data/example.conf
 api-data/clients.json
+api-data/telegram.json

@@ -1,9 +1,10 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from pydantic import ValidationError
 
 from api_side.clients import load_clients_settings
+from api_side.telegram import send_failure_notification
 from shared.schemas import CheckResult
 from shared.security import NONCE_RE, parse_utc_timestamp, signature_matches
 
@@ -83,6 +84,7 @@ async def health() -> dict:
 @app.post("/checks")
 async def receive_check(
     request: Request,
+    background_tasks: BackgroundTasks,
     x_client_id: str | None = Header(default=None),
     x_timestamp: str | None = Header(default=None),
     x_nonce: str | None = Header(default=None),
@@ -101,6 +103,8 @@ async def receive_check(
     verify_request_signature(body, result, x_client_id, x_timestamp, x_nonce, x_signature)
     latest_results[(result.client_id, result.server_id)] = result
     result_history.append(result)
+    if not result.ok:
+        background_tasks.add_task(send_failure_notification, result)
     return {"ok": True, "received_at": datetime.now(UTC)}
 
 

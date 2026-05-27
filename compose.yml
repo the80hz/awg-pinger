@@ -12,6 +12,7 @@ services:
       - ./api-data:/app/api-data:ro
     environment:
       CLIENTS_PATH: /app/api-data/clients.json
+      TELEGRAM_CONFIG_PATH: /app/api-data/telegram.json
 
   awg-client-side:
     image: the80hz/awg-pinger:awg-client-side

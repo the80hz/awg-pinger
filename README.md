@@ -90,6 +90,23 @@ The API service needs `api-data/clients.json`.
 The client container needs `/dev/net/tun`, `NET_ADMIN`, and host kernel support for AmneziaWG.
 The image builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`.
 
+## Telegram Alerts
+
+`api-side` can send Telegram notifications when a received check result has `ok: false`.
+
+Create `api-data/telegram.json` on the API host:
+
+```json
+{
+  "bot_token": "123456:telegram-bot-token",
+  "chat_id": "123456789"
+}
+```
+
+The file is mounted read-only into `api-side` and is ignored by git. You can also set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as environment variables; if both are present, they override `api-data/telegram.json`.
+
+If no Telegram config is present, notifications are disabled. Telegram delivery errors are logged, but they do not reject incoming check results.
+
 ## Request Security
 
 `POST /checks` requires HMAC-SHA256 request signing. The client signs the exact JSON body with its `client_secret`.
