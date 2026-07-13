@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 data/settings.json
 data/*.conf
+data/*.ovpn
 !data/example.conf
 api-data/clients.json
 api-data/telegram.json

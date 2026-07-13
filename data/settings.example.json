@@ -8,10 +8,20 @@
     {
       "id": "vps-1",
       "name": "VPS 1",
+      "type": "awg",
       "config": "vps-1.conf",
       "ping_host": "10.8.0.1",
       "ping_count": 3,
       "timeout_seconds": 20
+    },
+    {
+      "id": "openvpn-1",
+      "name": "OpenVPN 1",
+      "type": "openvpn",
+      "config": "openvpn-1.ovpn",
+      "ping_host": "1.1.1.1",
+      "ping_count": 3,
+      "timeout_seconds": 60
     }
   ]
 }

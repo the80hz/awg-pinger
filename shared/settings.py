@@ -2,8 +2,9 @@ import json
 import os
 import re
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from shared.security import CLIENT_ID_RE
 
@@ -12,8 +13,11 @@ SERVER_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$")
 
 
 class ServerConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     name: str | None = None
+    tunnel_type: Literal["awg", "openvpn"] = Field(default="awg", alias="type")
     config: str
     ping_host: str
     ping_count: int = Field(default=3, ge=1, le=10)
@@ -26,17 +30,18 @@ class ServerConfig(BaseModel):
             raise ValueError("server id must contain only letters, numbers, dots, underscores and dashes")
         return value
 
-    @field_validator("config")
-    @classmethod
-    def validate_config(cls, value: str) -> str:
+    @model_validator(mode="after")
+    def validate_config(self) -> "ServerConfig":
+        value = self.config
         path = Path(value)
         if path.is_absolute() or ".." in path.parts:
             raise ValueError("config must be a relative file name inside data directory")
         if path.name != value:
             raise ValueError("config must be a file name, not a nested path")
-        if path.suffix != ".conf":
-            raise ValueError("config must point to a .conf file")
-        return value
+        expected_suffix = ".ovpn" if self.tunnel_type == "openvpn" else ".conf"
+        if path.suffix.lower() != expected_suffix:
+            raise ValueError(f"{self.tunnel_type} config must point to a {expected_suffix} file")
+        return self
 
 
 class ClientSettings(BaseModel):

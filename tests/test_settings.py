@@ -26,6 +26,25 @@ def test_config_must_be_conf_file() -> None:
         ServerConfig(id="vps-1", config="vps-1.txt", ping_host="10.8.0.1")
 
 
+def test_openvpn_config_must_be_ovpn_file() -> None:
+    server = ServerConfig(
+        id="openvpn-1",
+        type="openvpn",
+        config="profile.ovpn",
+        ping_host="1.1.1.1",
+    )
+
+    assert server.tunnel_type == "openvpn"
+
+    with pytest.raises(ValidationError):
+        ServerConfig(
+            id="openvpn-1",
+            type="openvpn",
+            config="profile.conf",
+            ping_host="1.1.1.1",
+        )
+
+
 def test_api_base_url_requires_http() -> None:
     with pytest.raises(ValidationError):
         ClientSettings(

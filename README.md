@@ -1,13 +1,13 @@
-# AWG Pinger
+# VPN Pinger (AmneziaWG + OpenVPN)
 
-Two small services for periodic AWG tunnel checks.
+Two small services for periodic AmneziaWG and OpenVPN tunnel checks.
 
 ## Services
 
-`awg-client-side` runs near the AWG configs. It periodically:
+`awg-client-side` runs near the VPN configs. It periodically:
 
 1. loads `data/settings.json`;
-2. brings each tunnel up with `awg-quick`;
+2. brings each tunnel up with `awg-quick` or `openvpn`;
 3. pings the configured host through the tunnel;
 4. brings the tunnel down;
 5. posts the result to `api-side`.
@@ -47,10 +47,20 @@ Create `data/settings.json` next to `compose.yml`:
     {
       "id": "vps-1",
       "name": "VPS 1",
+      "type": "awg",
       "config": "vps-1.conf",
       "ping_host": "10.8.0.1",
       "ping_count": 3,
       "timeout_seconds": 20
+    },
+    {
+      "id": "openvpn-1",
+      "name": "OpenVPN 1",
+      "type": "openvpn",
+      "config": "openvpn-1.ovpn",
+      "ping_host": "1.1.1.1",
+      "ping_count": 3,
+      "timeout_seconds": 60
     }
   ]
 }
@@ -62,7 +72,23 @@ Put matching tunnel configs in the same `data/` directory:
 data/
   settings.json
   vps-1.conf
+  openvpn-1.ovpn
 ```
+
+`type` can be `awg` (the default, so existing settings remain valid) or `openvpn`.
+AWG entries use `.conf`; OpenVPN entries use `.ovpn`. Config paths must be file names
+inside `data/`—absolute paths are intentionally rejected because the directory is
+mounted into the container as `/app/data`.
+
+For example, copy a local profile into the private `data/` directory before starting:
+
+```bash
+cp '/Users/the80hz/Library/Mobile Documents/com~apple~CloudDocs/az-gen1.ovpn' data/az-gen1.ovpn
+```
+
+Then configure it with `"type": "openvpn"` and `"config": "az-gen1.ovpn"`.
+Both `data/*.ovpn` and `data/*.conf` are ignored by git because they commonly contain
+private keys.
 
 ## Run Together Locally
 
@@ -88,7 +114,7 @@ docker compose up --build awg-client-side
 
 The API service needs `api-data/clients.json`.
 The client container needs `/dev/net/tun`, `NET_ADMIN`, and host kernel support for AmneziaWG.
-The image builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`, and includes `amneziawg-go` as a userspace fallback when the host kernel does not support `type amneziawg`.
+The image includes OpenVPN, builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`, and includes `amneziawg-go` as a userspace fallback when the host kernel does not support `type amneziawg`.
 
 ## Client Logs
 
@@ -98,7 +124,7 @@ The image builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`, and i
 LOG_LEVEL=DEBUG docker compose up awg-client-side
 ```
 
-This prints `awg-quick`, `ping`, API response status, and command output on failures.
+This prints `awg-quick` or OpenVPN lifecycle events, `ping`, API response status, and command output on failures.
 
 When both services run in the same compose project, set client `api_base_url` to `http://api-side:8000`. Inside a container, `localhost` points to that same container, not to `api-side`.
 

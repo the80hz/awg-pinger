@@ -214,7 +214,7 @@ def test_failure_message_contains_context() -> None:
         )
     )
 
-    assert "AWG tunnel check failed" in message
+    assert "VPN tunnel check failed" in message
     assert "client-1" in message
     assert "VPS 1" in message
     assert "ping failed" in message

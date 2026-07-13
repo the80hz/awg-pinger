@@ -34,5 +34,6 @@ services:
     environment:
       SETTINGS_PATH: /app/data/settings.json
       TUNNEL_QUICK_CMD: awg-quick
+      OPENVPN_CMD: openvpn
       WG_QUICK_USERSPACE_IMPLEMENTATION: amneziawg-go
       LOG_LEVEL: ${LOG_LEVEL:-INFO}

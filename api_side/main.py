@@ -9,7 +9,7 @@ from shared.schemas import CheckResult
 from shared.security import NONCE_RE, parse_utc_timestamp, signature_matches
 
 
-app = FastAPI(title="AWG Pinger API Side", version="0.1.0")
+app = FastAPI(title="VPN Pinger API Side", version="0.1.0")
 
 latest_results: dict[tuple[str, str], CheckResult] = {}
 result_history: list[CheckResult] = []

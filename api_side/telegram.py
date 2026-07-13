@@ -51,7 +51,7 @@ def telegram_config() -> tuple[str, str] | None:
 def failure_message(result: CheckResult) -> str:
     server_label = result.server_name or result.server_id
     lines = [
-        "<b>AWG tunnel check failed</b>",
+        "<b>VPN tunnel check failed</b>",
         f"Client: <code>{html.escape(result.client_id)}</code>",
         f"Server: <code>{html.escape(server_label)}</code>",
         f"Server ID: <code>{html.escape(result.server_id)}</code>",

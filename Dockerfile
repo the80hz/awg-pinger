@@ -36,7 +36,7 @@ RUN make -C /src/amneziawg-tools/src install \
     WITH_SYSTEMDUNITS=no
 
 
-FROM golang:1.24 AS awg-go-builder
+FROM golang:1.25 AS awg-go-builder
 
 ARG AMNEZIAWG_GO_REF=master
 
@@ -63,6 +63,7 @@ RUN apt-get update \
         iptables \
         iproute2 \
         iputils-ping \
+        openvpn \
         openresolv \
         procps \
     && rm -rf /var/lib/apt/lists/*
