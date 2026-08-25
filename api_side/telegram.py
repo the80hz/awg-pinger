@@ -56,7 +56,7 @@ def failure_message(result: CheckResult) -> str:
         f"Server: <code>{html.escape(server_label)}</code>",
         f"Server ID: <code>{html.escape(result.server_id)}</code>",
         f"Checked at: <code>{html.escape(result.checked_at.isoformat())}</code>",
-        f"Comment: {html.escape(result.comment)}",
+        f"Reason: {html.escape(result.comment)}",
     ]
     if result.duration_ms is not None:
         lines.append(f"Duration: <code>{result.duration_ms} ms</code>")

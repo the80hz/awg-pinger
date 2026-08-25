@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import httpx
 from pydantic import ValidationError
 
-from awg_client_side.checker import check_tunnel
+from awg_client_side.checker import check_tunnel, read_resolv_conf, resolv_conf_path
 from shared.security import canonical_json, sign_body
 from shared.settings import get_settings_path, load_client_settings
 
@@ -74,6 +74,34 @@ async def report_result(
     response.raise_for_status()
 
 
+async def detect_local_dns_problem() -> str | None:
+    """Check the checker's own DNS before blaming any VPN server.
+
+    A tunnel teardown that wipes /etc/resolv.conf makes every later check fail
+    with confusing name-resolution timeouts; detect that up front so failure
+    reports point at the checker instead of the VPN servers.
+    """
+    content = read_resolv_conf()
+    if content is None:
+        return f"cannot read {resolv_conf_path()}"
+    has_nameserver = any(
+        line.strip().startswith("nameserver") for line in content.splitlines()
+    )
+    if not has_nameserver:
+        return (
+            f"{resolv_conf_path()} has no nameserver entries (probably wiped by a previous "
+            f"tunnel teardown; restart the container or restore the file)"
+        )
+
+    probe_host = os.getenv("DNS_PROBE_HOST", "google.com")
+    loop = asyncio.get_running_loop()
+    try:
+        await asyncio.wait_for(loop.getaddrinfo(probe_host, None), timeout=10)
+    except (socket.gaierror, asyncio.TimeoutError):
+        return f"local DNS cannot resolve '{probe_host}' (no tunnel involved)"
+    return None
+
+
 def log_api_resolution(api_base_url: str) -> None:
     host = urlparse(api_base_url).hostname
     if not host:
@@ -101,10 +129,16 @@ async def run_once() -> None:
     log_api_resolution(settings.api_base_url)
     timeout = httpx.Timeout(settings.request_timeout_seconds)
 
+    local_dns_problem = await detect_local_dns_problem()
+    if local_dns_problem:
+        logger.warning("local DNS problem detected: %s", local_dns_problem)
+
     async with httpx.AsyncClient(timeout=timeout) as client:
         for server in settings.servers:
             logger.info("checking server server_id=%s name=%s", server.id, server.name)
-            result = await check_tunnel(settings_path, settings.client_id, server)
+            result = await check_tunnel(
+                settings_path, settings.client_id, server, local_dns_problem
+            )
             log_api_resolution(settings.api_base_url)
             try:
                 await report_result(

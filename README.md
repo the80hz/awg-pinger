@@ -116,6 +116,28 @@ The API service needs `api-data/clients.json`.
 The client container needs `/dev/net/tun`, `NET_ADMIN`, and host kernel support for AmneziaWG.
 The image includes OpenVPN, builds `awg` and `awg-quick` from `amnezia-vpn/amneziawg-tools`, and includes `amneziawg-go` as a userspace fallback when the host kernel does not support `type amneziawg`.
 
+## Failure Reasons
+
+Failed checks report a classified, human-readable reason instead of the raw
+command error: the checker distinguishes its own broken DNS (e.g. an empty
+`/etc/resolv.conf` left behind by a tunnel teardown), an unresolvable endpoint
+hostname, a server that never completes the WireGuard handshake, a tunnel that
+comes up but forwards no traffic (100% packet loss or DNS dead inside the
+tunnel), and OpenVPN-specific causes (unresolvable server address, TCP/UDP
+connection timeouts, AUTH/TLS failures).
+
+Before each cycle the client verifies its own DNS; when it is broken, every
+failure report is prefixed with a note that the checker itself — not the VPN
+server — is unhealthy. The client also snapshots `resolv.conf` before each
+check and restores it if a tunnel teardown leaves it without nameservers, and
+cleans up tunnel interfaces left behind by interrupted checks.
+
+Related environment variables (all optional):
+
+- `RESOLV_CONF_PATH` — resolv.conf location to guard (default `/etc/resolv.conf`);
+- `DNS_PROBE_HOST` — hostname resolved during the pre-cycle DNS self-check (default `google.com`);
+- `AWG_CMD` — `awg` binary used to query handshake state after a failed ping (default `awg`).
+
 ## Client Logs
 
 `awg-client-side` logs each tunnel check step. For detailed diagnostics, run with:

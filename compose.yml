@@ -21,6 +21,9 @@ services:
       target: awg-client-side
     container_name: awg-pinger-awg-client-side
     restart: unless-stopped
+    # tini reaps the amneziawg-go/awg orphans that awg-quick leaves behind;
+    # without it they pile up as zombie processes
+    init: true
     privileged: true
     cap_add:
       - NET_ADMIN
