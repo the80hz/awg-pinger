@@ -75,6 +75,11 @@ data/
   openvpn-1.ovpn
 ```
 
+Cycles are aligned to wall-clock slots: with `interval_seconds` of 1800 a checker
+runs at :00/:30. `schedule_offset_seconds` shifts those slots, so two checkers can
+run in anti-phase — leave it `0` on one checker and set `900` on the other to get
+:00/:30 and :15/:45. It defaults to `0`, so existing settings keep running on :00/:30.
+
 `type` can be `awg` (the default, so existing settings remain valid) or `openvpn`.
 AWG entries use `.conf`; OpenVPN entries use `.ovpn`. Config paths must be file names
 inside `data/`—absolute paths are intentionally rejected because the directory is

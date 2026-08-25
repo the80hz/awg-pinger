@@ -3,6 +3,7 @@ import logging
 import os
 import secrets
 import socket
+import time
 from datetime import UTC, datetime
 from urllib.parse import urlparse
 
@@ -165,14 +166,43 @@ async def run_once() -> None:
                 logger.error("failed to report check result server_id=%s error=%r", server.id, exc)
 
 
+def seconds_until_next_slot(now: float, interval: int, offset: int = 0) -> float:
+    """Seconds to wait so cycles land on wall-clock slots.
+
+    Slots are the instants where (t - offset) is a whole multiple of interval,
+    measured from the Unix epoch. Because 1800s divides an hour evenly, an
+    offset of 0 puts a 30-minute cycle on :00/:30 and an offset of 900 on
+    :15/:45, letting two checkers run in anti-phase. Returns 0 when already on a
+    slot.
+    """
+    phase = (now - offset) % interval
+    return 0.0 if phase == 0 else interval - phase
+
+
 async def run_forever() -> None:
     logger.info("starting awg-client-side")
     while True:
         try:
             settings = load_client_settings()
+        except (FileNotFoundError, ValidationError, ValueError) as exc:
+            logger.exception("settings error: %s", exc)
+            await asyncio.sleep(60)
+            continue
+
+        wait = seconds_until_next_slot(
+            time.time(), settings.interval_seconds, settings.schedule_offset_seconds
+        )
+        if wait > 0:
+            logger.info(
+                "waiting %.0fs until next scheduled slot interval_seconds=%s offset_seconds=%s",
+                wait,
+                settings.interval_seconds,
+                settings.schedule_offset_seconds,
+            )
+            await asyncio.sleep(wait)
+
+        try:
             await run_once()
-            logger.info("sleeping interval_seconds=%s", settings.interval_seconds)
-            await asyncio.sleep(settings.interval_seconds)
         except (FileNotFoundError, ValidationError, ValueError) as exc:
             logger.exception("settings error: %s", exc)
             await asyncio.sleep(60)

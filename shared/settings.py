@@ -49,6 +49,7 @@ class ClientSettings(BaseModel):
     client_secret: str = Field(min_length=32)
     api_base_url: str
     interval_seconds: int = Field(default=1800, ge=30)
+    schedule_offset_seconds: int = Field(default=0, ge=0, le=86400)
     request_timeout_seconds: int = Field(default=30, ge=3, le=300)
     servers: list[ServerConfig] = Field(default_factory=list)
 

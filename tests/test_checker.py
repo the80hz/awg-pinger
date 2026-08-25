@@ -123,6 +123,22 @@ def test_detect_local_dns_problem_reports_empty_resolv_conf(monkeypatch, tmp_pat
     assert "no nameserver entries" in problem
 
 
+def test_seconds_until_next_slot_on_slot_returns_zero() -> None:
+    assert main.seconds_until_next_slot(3600.0, 1800, 0) == 0.0
+    assert main.seconds_until_next_slot(4500.0, 1800, 900) == 0.0
+
+
+def test_seconds_until_next_slot_offset_zero_waits_to_next() -> None:
+    # 100s past :00 -> 1700s left until :30
+    assert main.seconds_until_next_slot(3700.0, 1800, 0) == 1700.0
+
+
+def test_seconds_until_next_slot_anti_phase_offset() -> None:
+    # checker-2 at offset 900 is 15 min out of phase with checker-1
+    assert main.seconds_until_next_slot(3600.0, 1800, 900) == 900.0
+    assert main.seconds_until_next_slot(3600.0, 1800, 0) == 0.0
+
+
 def test_detect_local_dns_problem_ok(monkeypatch, tmp_path) -> None:
     resolv_conf = tmp_path / "resolv.conf"
     resolv_conf.write_text("nameserver 127.0.0.11\n", encoding="utf-8")
