@@ -13,7 +13,7 @@ COPY shared ./shared
 
 FROM python:3.12-slim AS awg-tools-builder
 
-ARG AMNEZIAWG_TOOLS_REF=v1.0.20260223
+ARG AMNEZIAWG_TOOLS_REF=v3.1.20260812
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -38,7 +38,7 @@ RUN make -C /src/amneziawg-tools/src install \
 
 FROM golang:1.25 AS awg-go-builder
 
-ARG AMNEZIAWG_GO_REF=master
+ARG AMNEZIAWG_GO_REF=v3.1.20260828
 
 RUN git clone --depth 1 --branch "${AMNEZIAWG_GO_REF}" \
     https://github.com/amnezia-vpn/amneziawg-go.git /src/amneziawg-go
