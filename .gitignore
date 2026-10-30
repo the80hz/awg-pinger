@@ -9,3 +9,10 @@ data/*.ovpn
 !data/example.conf
 api-data/clients.json
 api-data/telegram.json
+
+# Persistent local notification state
+state/
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm

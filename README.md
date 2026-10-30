@@ -155,11 +155,21 @@ This prints `awg-quick` or OpenVPN lifecycle events, `ping`, API response status
 
 When both services run in the same compose project, set client `api_base_url` to `http://api-side:8000`. Inside a container, `localhost` points to that same container, not to `api-side`.
 
-## Telegram Alerts
+## Уведомления Telegram
 
-`api-side` can send Telegram notifications when a received check result has `ok: false`.
+`api-side` ведёт отдельный эпизод сбоя для каждой пары `(client_id, server_id)`:
 
-Create `api-data/telegram.json` on the API host:
+- первая неудачная проверка создаёт сообщение;
+- повторные ошибки редактируют его: счётчик, время и последнюю причину;
+- успешная проверка редактирует то же сообщение на «VPN восстановлен»;
+- следующий сбой после восстановления создаёт новое сообщение.
+
+Успешные проверки без открытого сбоя сообщений не создают. Смена причины ошибки
+не открывает новый эпизод. Устаревшие результаты и повторные результаты с тем же
+`checked_at` не учитываются; клиенты должны присылать точное время проверки.
+Наивные timestamps трактуются как UTC, даты сообщений показаны в UTC.
+
+Создайте `api-data/telegram.json` на API-хосте:
 
 ```json
 {
@@ -168,9 +178,45 @@ Create `api-data/telegram.json` on the API host:
 }
 ```
 
-The file is mounted read-only into `api-side` and is ignored by git. You can also set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` as environment variables; if both are present, they override `api-data/telegram.json`.
+Файл подключён только для чтения и исключён из Git. Переменные
+`TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`, заданные вместе, имеют приоритет.
+Без конфигурации уведомления отключены, новые эпизоды не записываются.
+Существующая очередь остаётся в БД до возвращения прежней конфигурации.
+Состояние разделено по ID бота и чату; смена токена того же бота сохраняет
+привязку сообщений. Другой бот или чат начинает собственную историю.
 
-If no Telegram config is present, notifications are disabled. Telegram delivery errors are logged, but they do not reject incoming check results.
+SQLite хранит эпизоды, ID сообщений, временные отметки и очередь доставки.
+Путь задаёт `NOTIFICATION_DB_PATH`, по умолчанию `/app/state/notifications.sqlite3`.
+Compose подключает именованный volume `notification-state` к `/app/state`.
+Перезапуск и пересоздание контейнера сохраняют состояние; `docker compose down -v`
+удалит его. Для запуска без Docker задайте путь в доступном для записи каталоге.
+Схема создаётся автоматически миграцией `api_side/migrations/001_incidents.sql`.
+Используйте локальную файловую систему с поддержкой SQLite и `flock` (Linux/macOS),
+а не сетевой общий том для нескольких хостов.
+
+Состояние записывается до успешного ответа `POST /checks`. Ошибка записи в БД
+не подтверждается как успешный приём. Отдельный worker проверяет очередь каждые
+5 секунд, в том числе сразу после запуска. Новые версии одного сообщения
+объединяются до доставки. Несколько API workers используют общий файловый lock,
+чтобы не отправлять одну запись параллельно. Транзакции SQLite не удерживаются
+во время обращения к Telegram.
+
+При недоступности Telegram доставка повторяется с задержкой 30 секунд и
+экспоненциальным увеличением до 30 минут; `retry_after` учитывается для всего
+получателя. Временные ошибки, 403 и таймауты редактирования не создают нового
+сообщения. Только явный ответ «message to edit not found» разрешает отправить
+замену. Если сбой успел закончиться до первой доставки, придёт одна карточка
+уже завершённого эпизода. Восстановление не создаёт отдельного уведомления.
+
+Ограничение Bot API: если первый `sendMessage` выполнен, но ответ с ID потерян
+или процесс завершился до записи ID в SQLite, повторная доставка может создать
+дубль. У `sendMessage` нет ключа идемпотентности. Подтверждённые ID сохраняются;
+повторные редактирования безопасны, ответ «message is not modified» считается
+успехом. Старые сообщения, отправленные до этой версии, автоматически не
+подхватываются, поскольку их ID ранее не сохранялись.
+
+История эпизодов пока не очищается автоматически. Постоянное хранение относится
+к уведомлениям; `/checks/latest` и история API по-прежнему находятся в памяти.
 
 ## Request Security
 

@@ -10,9 +10,11 @@ services:
       - "8000:8000"
     volumes:
       - ./api-data:/app/api-data:ro
+      - notification-state:/app/state
     environment:
       CLIENTS_PATH: /app/api-data/clients.json
       TELEGRAM_CONFIG_PATH: /app/api-data/telegram.json
+      NOTIFICATION_DB_PATH: /app/state/notifications.sqlite3
 
   awg-client-side:
     image: the80hz/awg-pinger:awg-client-side
@@ -40,3 +42,6 @@ services:
       OPENVPN_CMD: openvpn
       WG_QUICK_USERSPACE_IMPLEMENTATION: amneziawg-go
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+volumes:
+  notification-state:

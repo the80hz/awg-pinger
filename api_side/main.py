@@ -1,15 +1,31 @@
+import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from typing import NoReturn
 
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import ValidationError
 
 from api_side.clients import load_clients_settings
-from api_side.telegram import send_failure_notification
+from api_side.incidents import destination_key, record_result
+from api_side.telegram import notification_worker, telegram_config
 from shared.schemas import CheckResult
 from shared.security import NONCE_RE, parse_utc_timestamp, signature_matches
 
 
-app = FastAPI(title="VPN Pinger API Side", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    stop = asyncio.Event()
+    worker = asyncio.create_task(notification_worker(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        await worker
+
+
+app = FastAPI(title="VPN Pinger API Side", version="0.1.0", lifespan=lifespan)
 
 latest_results: dict[tuple[str, str], CheckResult] = {}
 result_history: list[CheckResult] = []
@@ -18,8 +34,10 @@ MAX_CLOCK_SKEW = timedelta(minutes=2)
 MAX_BODY_BYTES = 64 * 1024
 
 
-def reject(status_code: int, comment: str) -> None:
-    raise HTTPException(status_code=status_code, detail={"ok": False, "comment": comment})
+def reject(status_code: int, comment: str) -> NoReturn:
+    raise HTTPException(
+        status_code=status_code, detail={"ok": False, "comment": comment}
+    )
 
 
 def prune_nonces(now: datetime) -> None:
@@ -40,7 +58,7 @@ def verify_request_signature(
     x_nonce: str | None,
     x_signature: str | None,
 ) -> None:
-    if not all([x_client_id, x_timestamp, x_nonce, x_signature]):
+    if not x_client_id or not x_timestamp or not x_nonce or not x_signature:
         reject(401, "missing signature headers")
     if x_client_id != result.client_id:
         reject(401, "client id header does not match payload")
@@ -70,26 +88,27 @@ def verify_request_signature(
     if nonce_key in used_nonces:
         reject(409, "nonce already used")
 
-    if not signature_matches(api_client.secret, x_timestamp, x_nonce, body, x_signature):
+    if not signature_matches(
+        api_client.secret, x_timestamp, x_nonce, body, x_signature
+    ):
         reject(401, "invalid signature")
 
     used_nonces[nonce_key] = request_time
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, object]:
     return {"ok": True}
 
 
 @app.post("/checks")
 async def receive_check(
     request: Request,
-    background_tasks: BackgroundTasks,
     x_client_id: str | None = Header(default=None),
     x_timestamp: str | None = Header(default=None),
     x_nonce: str | None = Header(default=None),
     x_signature: str | None = Header(default=None),
-) -> dict:
+) -> dict[str, object]:
     body_bytes = await request.body()
     if len(body_bytes) > MAX_BODY_BYTES:
         reject(413, "request body too large")
@@ -100,16 +119,20 @@ async def receive_check(
     except ValueError as exc:
         reject(422, f"invalid check result: {exc}")
 
-    verify_request_signature(body, result, x_client_id, x_timestamp, x_nonce, x_signature)
+    verify_request_signature(
+        body, result, x_client_id, x_timestamp, x_nonce, x_signature
+    )
+    config = telegram_config()
+    if config is not None:
+        # Commit before acknowledging the check, independently of Telegram delivery.
+        await asyncio.to_thread(record_result, result, destination_key(*config))
     latest_results[(result.client_id, result.server_id)] = result
     result_history.append(result)
-    if not result.ok:
-        background_tasks.add_task(send_failure_notification, result)
     return {"ok": True, "received_at": datetime.now(UTC)}
 
 
 @app.get("/checks/latest")
-async def list_latest() -> dict:
+async def list_latest() -> dict[str, object]:
     results = sorted(
         latest_results.values(),
         key=lambda item: (item.client_id, item.server_id),
@@ -118,8 +141,10 @@ async def list_latest() -> dict:
 
 
 @app.get("/checks/latest/{client_id}/{server_id}")
-async def get_latest(client_id: str, server_id: str) -> dict:
+async def get_latest(client_id: str, server_id: str) -> dict[str, object]:
     result = latest_results.get((client_id, server_id))
     if result is None:
-        raise HTTPException(status_code=404, detail={"ok": False, "comment": "check result not found"})
+        raise HTTPException(
+            status_code=404, detail={"ok": False, "comment": "check result not found"}
+        )
     return result.model_dump(mode="json")
