@@ -12,6 +12,7 @@ from pathlib import Path
 import httpx
 from pydantic import BaseModel, Field, ValidationError
 
+from api_side.clients import client_display_name
 from api_side.incidents import database, destination_key, state_path
 from shared.schemas import CheckResult
 
@@ -81,7 +82,7 @@ def incident_message(row: sqlite3.Row) -> str:
 
     lines = [
         f"<b>{status}</b>",
-        f"Пингер: <code>{escaped(result.client_id)}</code>",
+        f"Пингер: <code>{escaped(client_display_name(result.client_id))}</code>",
         f"Сервер: <code>{escaped(result.server_name or result.server_id)}</code>",
         f"ID: <code>{escaped(result.server_id)}</code>",
         f"Начало: {started:%Y-%m-%d %H:%M:%S} UTC",

@@ -27,6 +27,7 @@ def configure_clients(monkeypatch, tmp_path, enabled: bool = True) -> None:
                 "clients": [
                     {
                         "client_id": "client-1",
+                        "display_name": "Home",
                         "secret": SECRET,
                         "enabled": enabled,
                     }
@@ -106,6 +107,7 @@ def test_dashboard_keeps_newest_result_and_hides_command_output(monkeypatch, tmp
 
     data = client.get("/dashboard/data").json()
     assert data["clients"] == ["client-1"]
+    assert data["client_names"] == {"client-1": "Home"}
     assert len(data["results"]) == 1
     assert data["results"][0]["ok"]
     assert "command_output" not in data["results"][0]

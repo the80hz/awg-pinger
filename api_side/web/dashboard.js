@@ -20,7 +20,8 @@ function health(result) {
 }
 
 function render() {
-  const { clients, results } = snapshot;
+  const { clients, client_names: clientNames = {}, results } = snapshot;
+  const nameFor = (id) => clientNames[id] ?? id;
   const grouped = new Map();
   for (const item of results) {
     if (!grouped.has(item.server_id)) grouped.set(item.server_id, new Map());
@@ -35,7 +36,7 @@ function render() {
     const status = checks.length ? (fresh.length ? "ok" : "stale") : "missing";
     const card = element("article", "", "source");
     card.append(
-      element("strong", client),
+      element("strong", nameFor(client)),
       element("span", summary, "state " + status),
       element("small", checks.length ? `Проверок: ${checks.length} · Сбоев: ${fresh.filter((item) => !item.ok).length}` : "Проверки ещё не поступили"),
       element("small", Number.isFinite(latest) ? "Последний отчёт " + clock.format(latest) : "")
@@ -44,7 +45,7 @@ function render() {
   }));
 
   const head = element("tr", "");
-  for (const title of ["Узел", ...clients]) {
+  for (const title of ["Узел", ...clients.map(nameFor)]) {
     const column = element("th", title);
     column.scope = "col";
     head.append(column);

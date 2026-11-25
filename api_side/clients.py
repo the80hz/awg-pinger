@@ -11,6 +11,11 @@ class ApiClient(BaseModel):
     client_id: str
     secret: str = Field(min_length=32)
     enabled: bool = True
+    display_name: str | None = Field(default=None, min_length=1, max_length=80)
+
+    @property
+    def name(self) -> str:
+        return self.display_name or self.client_id
 
     @field_validator("client_id")
     @classmethod
@@ -47,3 +52,11 @@ def load_clients_settings() -> ApiClientsSettings:
         raw_settings = json.load(file)
 
     return ApiClientsSettings.model_validate(raw_settings)
+
+
+def client_display_name(client_id: str) -> str:
+    try:
+        client = load_clients_settings().get_client(client_id)
+    except (OSError, ValueError):
+        return client_id
+    return client.name if client is not None else client_id

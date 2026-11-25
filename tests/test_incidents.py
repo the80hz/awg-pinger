@@ -223,8 +223,10 @@ def test_new_revision_during_delivery_is_not_lost(monkeypatch):
 
 
 def test_safe_bounded_message_and_destination_isolation(monkeypatch):
+    monkeypatch.setattr(telegram, "client_display_name", lambda _: "Home <test>")
     record_result(result(command_output="<&😀" * 5000, server_name="<b>name</b>"), KEY)
     message = telegram.incident_message(rows()[0])
+    assert "Home &lt;test&gt;" in message
     assert "&lt;b&gt;name&lt;/b&gt;" in message
     assert len(html.unescape(message).encode("utf-16-le")) // 2 < 4096
     assert destination_key("123:rotated", "chat") == KEY

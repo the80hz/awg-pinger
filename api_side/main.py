@@ -163,14 +163,15 @@ async def dashboard() -> FileResponse:
 @app.get("/dashboard/data")
 async def dashboard_data() -> dict[str, object]:
     clients = load_clients_settings().clients
-    enabled = sorted(client.client_id for client in clients if client.enabled)
+    names = {client.client_id: client.name for client in clients if client.enabled}
     records = await asyncio.to_thread(results.list_results)
     fields = {"client_id", "server_id", "server_name", "ok", "checked_at", "duration_ms", "comment"}
     return {
-        "clients": enabled,
+        "clients": sorted(names),
+        "client_names": names,
         "results": [
             record.model_dump(mode="json", include=fields)
             for record in records
-            if record.client_id in enabled
+            if record.client_id in names
         ],
     }

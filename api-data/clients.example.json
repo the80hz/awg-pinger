@@ -2,6 +2,7 @@
   "clients": [
     {
       "client_id": "vps-checker-1",
+      "display_name": "the80hz",
       "secret": "change-me-to-a-long-random-secret-at-least-32-chars",
       "enabled": true
     }
