@@ -2,13 +2,21 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
+import pytest
 
 import api_side.main
-from api_side.main import app, latest_results, result_history, used_nonces
+from api_side import results
+from api_side.main import app, used_nonces
 from api_side.telegram import telegram_config
 from shared.security import canonical_json, sign_body
 
 SECRET = "test-secret-value-that-is-long-enough"
+
+
+@pytest.fixture(autouse=True)
+def result_database(monkeypatch, tmp_path):
+    monkeypatch.setenv("RESULTS_DB_PATH", str(tmp_path / "results.sqlite3"))
+    results.initialize()
 
 
 def configure_clients(monkeypatch, tmp_path, enabled: bool = True) -> None:
@@ -53,8 +61,6 @@ def check_payload(client_id: str = "client-1") -> dict:
 
 
 def reset_state() -> None:
-    latest_results.clear()
-    result_history.clear()
     used_nonces.clear()
 
 
@@ -75,6 +81,34 @@ def test_receive_and_list_latest(monkeypatch, tmp_path) -> None:
     assert latest_response.status_code == 200
     assert latest_response.json()["results"][0]["client_id"] == "client-1"
     assert latest_response.json()["results"][0]["server_id"] == "vps-1"
+
+
+def test_dashboard_keeps_newest_result_and_hides_command_output(monkeypatch, tmp_path) -> None:
+    configure_clients(monkeypatch, tmp_path)
+    reset_state()
+    client = TestClient(app)
+    now = datetime.now(UTC)
+    latest = canonical_json({
+        **check_payload(),
+        "checked_at": now.isoformat(),
+        "command_output": "internal diagnostics",
+    })
+    older = canonical_json({
+        **check_payload(),
+        "checked_at": (now - timedelta(minutes=1)).isoformat(),
+        "ok": False,
+    })
+    assert client.post("/checks", content=latest, headers=signed_headers(latest)).status_code == 200
+    assert client.post(
+        "/checks", content=older, headers=signed_headers(older, "nonce-1234567890123457")
+    ).status_code == 200
+    results.initialize()
+
+    data = client.get("/dashboard/data").json()
+    assert data["clients"] == ["client-1"]
+    assert len(data["results"]) == 1
+    assert data["results"][0]["ok"]
+    assert "command_output" not in data["results"][0]
 
 
 def test_rejects_invalid_signature(monkeypatch, tmp_path) -> None:

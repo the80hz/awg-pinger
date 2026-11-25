@@ -1,12 +1,17 @@
 import asyncio
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import NoReturn
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
+from api_side import results
 from api_side.clients import load_clients_settings
 from api_side.incidents import destination_key, record_result
 from api_side.telegram import notification_worker, telegram_config
@@ -16,19 +21,23 @@ from shared.security import NONCE_RE, parse_utc_timestamp, signature_matches
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    await asyncio.to_thread(results.initialize)
     stop = asyncio.Event()
-    worker = asyncio.create_task(notification_worker(stop))
+    worker = None
+    if os.getenv("TELEGRAM_WORKER_ENABLED", "1") == "1":
+        worker = asyncio.create_task(notification_worker(stop))
     try:
         yield
     finally:
         stop.set()
-        await worker
+        if worker is not None:
+            await worker
 
 
 app = FastAPI(title="VPN Pinger API Side", version="0.1.0", lifespan=lifespan)
 
-latest_results: dict[tuple[str, str], CheckResult] = {}
-result_history: list[CheckResult] = []
+web_dir = Path(__file__).with_name("web")
+app.mount("/static", StaticFiles(directory=web_dir), name="static")
 used_nonces: dict[tuple[str, str], datetime] = {}
 MAX_CLOCK_SKEW = timedelta(minutes=2)
 MAX_BODY_BYTES = 64 * 1024
@@ -67,8 +76,8 @@ def verify_request_signature(
 
     try:
         settings = load_clients_settings()
-    except (FileNotFoundError, ValidationError, ValueError) as exc:
-        reject(500, f"clients settings error: {exc}")
+    except (FileNotFoundError, ValidationError, ValueError):
+        reject(500, "clients settings error")
 
     api_client = settings.get_client(x_client_id)
     if api_client is None or not api_client.enabled:
@@ -126,25 +135,42 @@ async def receive_check(
     if config is not None:
         # Commit before acknowledging the check, independently of Telegram delivery.
         await asyncio.to_thread(record_result, result, destination_key(*config))
-    latest_results[(result.client_id, result.server_id)] = result
-    result_history.append(result)
+    await asyncio.to_thread(results.save, result)
     return {"ok": True, "received_at": datetime.now(UTC)}
 
 
 @app.get("/checks/latest")
 async def list_latest() -> dict[str, object]:
-    results = sorted(
-        latest_results.values(),
-        key=lambda item: (item.client_id, item.server_id),
-    )
-    return {"results": [result.model_dump(mode="json") for result in results]}
+    records = await asyncio.to_thread(results.list_results)
+    return {"results": [record.model_dump(mode="json") for record in records]}
 
 
 @app.get("/checks/latest/{client_id}/{server_id}")
 async def get_latest(client_id: str, server_id: str) -> dict[str, object]:
-    result = latest_results.get((client_id, server_id))
+    result = await asyncio.to_thread(results.get_result, client_id, server_id)
     if result is None:
         raise HTTPException(
             status_code=404, detail={"ok": False, "comment": "check result not found"}
         )
     return result.model_dump(mode="json")
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard() -> FileResponse:
+    return FileResponse(web_dir / "index.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/dashboard/data")
+async def dashboard_data() -> dict[str, object]:
+    clients = load_clients_settings().clients
+    enabled = sorted(client.client_id for client in clients if client.enabled)
+    records = await asyncio.to_thread(results.list_results)
+    fields = {"client_id", "server_id", "server_name", "ok", "checked_at", "duration_ms", "comment"}
+    return {
+        "clients": enabled,
+        "results": [
+            record.model_dump(mode="json", include=fields)
+            for record in records
+            if record.client_id in enabled
+        ],
+    }

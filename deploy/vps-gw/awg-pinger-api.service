@@ -1,0 +1,19 @@
+[Unit]
+Description=AWG Pinger API and dashboard
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Restart=on-failure
+RestartSec=5
+ExecStart=/usr/bin/podman run --rm --replace --name awg-pinger-api --pull=never \
+  --network=host --user=10001:10001 --cap-drop=all --security-opt=no-new-privileges \
+  -e TELEGRAM_WORKER_ENABLED=0 \
+  -v /opt/awg-pinger/api_side:/app/api_side:ro \
+  -v /etc/awg-pinger/api-data:/app/api-data:ro \
+  -v /var/lib/awg-pinger/state:/app/state \
+  localhost/awg-pinger-api:fb0b872 uvicorn api_side.main:app --host 100.80.0.4 --port 18080 --no-access-log
+ExecStop=/usr/bin/podman stop --time=10 awg-pinger-api
+
+[Install]
+WantedBy=multi-user.target

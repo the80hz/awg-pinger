@@ -1,0 +1,15 @@
+[Unit]
+Description=Deliver AWG Pinger notifications through an isolated AZ tunnel
+After=network-online.target awg-pinger-api.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=180
+ExecStart=/usr/bin/podman run --rm --replace --name awg-pinger-delivery --pull=never \
+  --network=slirp4netns --user=0:10001 --cap-drop=all --cap-add=NET_ADMIN --cap-add=NET_RAW \
+  --device=/dev/net/tun \
+  -v /opt/awg-pinger/api_side:/app/api_side:ro \
+  -v /etc/awg-pinger/api-data:/app/api-data:ro \
+  -v /etc/awg-pinger/data:/app/data:ro \
+  -v /var/lib/awg-pinger/state:/app/state \
+  localhost/the80hz/awg-pinger:awg-client-side python -m api_side.az_delivery

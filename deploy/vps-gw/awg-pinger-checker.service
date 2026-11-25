@@ -1,0 +1,17 @@
+[Unit]
+Description=AWG Pinger checker on vps-gw
+After=network-online.target awg-pinger-api.service
+Wants=network-online.target awg-pinger-api.service
+
+[Service]
+Restart=on-failure
+RestartSec=10
+ExecStart=/usr/bin/podman run --rm --replace --name awg-pinger-checker --pull=never \
+  --network=slirp4netns --cap-drop=all --cap-add=NET_ADMIN --cap-add=NET_RAW \
+  --device=/dev/net/tun --sysctl net.ipv4.conf.all.src_valid_mark=1 \
+  -e TUNNEL_QUICK_CMD=awg-quick -e WG_QUICK_USERSPACE_IMPLEMENTATION=amneziawg-go \
+  -v /etc/awg-pinger/data:/app/data:ro localhost/the80hz/awg-pinger:awg-client-side
+ExecStop=/usr/bin/podman stop --time=10 awg-pinger-checker
+
+[Install]
+WantedBy=multi-user.target

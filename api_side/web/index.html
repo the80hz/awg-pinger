@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>VPN-мониторинг · AWG Pinger</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <script src="/static/dashboard.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="brand">AWG PINGER</p><h1>Состояние VPN</h1></div>
+      <div class="controls"><time id="updated"></time><button id="refresh" type="button">Обновить</button></div>
+    </header>
+    <p id="error" role="status" hidden></p>
+    <section id="sources" aria-label="Источники проверок"></section>
+    <section class="panel" aria-labelledby="checks">
+      <div class="panel-bar"><h2 id="checks">Проверки</h2>
+        <input id="search" type="search" placeholder="Узел или протокол" aria-label="Найти проверку">
+        <label><input id="issues" type="checkbox"> Только сбои</label>
+      </div>
+      <div class="scroll"><table><thead id="columns"></thead><tbody id="rows"></tbody></table></div>
+      <p id="empty" hidden></p>
+    </section>
+  </main>
+</body>
+</html>
